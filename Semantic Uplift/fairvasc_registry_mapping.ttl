@@ -1,0 +1,4510 @@
+@prefix rr: <http://www.w3.org/ns/r2rml#> .
+@prefix fvc: <http://w3id.org/FAIRVASC#>.
+@prefix bvas: <http://w3id.org/BVAS#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix sno: <http://purl.bioontology.org/ontology/SNOMEDCT#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix ordo:<http://www.orpha.net/ORDO/> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix dpv: <https://w3id.org/dpv/dpv-owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix schema: <https://schema.org/> .
+
+
+######################## Here follows the Patient section and all the sections that are directly linked to it: ##################
+
+<#patient>
+
+
+	rr:logicalTable [ rr:sqlQuery """
+		WITH main_form AS (
+				SELECT
+					record_id,
+					year_of_birth,
+					CASE
+						WHEN gender = 'M' THEN 'C20197'
+						WHEN gender = 'F' THEN 'C16576'
+						WHEN gender = 'U' THEN 'C41438'
+					END AS gender_ncit
+				FROM FV_PatientData
+				WHERE redcap_repeat_instrument IS NULL
+			),
+			complications_form AS (
+				SELECT
+					record_id,
+					FORMATDATETIME(PARSEDATETIME(date_of_complication, 'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS complication_date,
+					CASE 
+						WHEN complications_type = 'MLG' THEN 'C9305' --malignant neoplasm
+						WHEN complications_type = 'CVC' THEN 'C115199' --cardiovascular complication
+						WHEN complications_type = 'INF' THEN 'C128320' --infection
+						WHEN complications_type = 'TBE' THEN 'C143873' --thromboembolic event 
+					END AS complication_type				
+				FROM FV_PatientData
+				WHERE redcap_repeat_instrument = 'complications_optional'
+			),
+			bvas_form AS (
+				SELECT 
+					record_id,
+					FORMATDATETIME(PARSEDATETIME(date_bvas,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS bvas_date
+				FROM FV_PatientData
+				WHERE redcap_repeat_instrument = 'bvas_optional' 
+			),
+			followup_form AS (
+				SELECT
+					record_id,
+					FORMATDATETIME(PARSEDATETIME(followup_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS date_of_encounter
+				FROM FV_PatientData
+				WHERE redcap_repeat_instrument = 'annual_or_encounter_followup' 
+			)
+		SELECT 
+			main_form.record_id,
+			main_form.year_of_birth,
+			main_form.gender_ncit,
+			complications_form.complication_date,
+			complications_form.complication_type,
+			bvas_form.bvas_date,
+			followup_form.date_of_encounter			
+		FROM main_form
+		LEFT JOIN complications_form ON main_form.record_id = complications_form.record_id
+		LEFT JOIN bvas_form ON main_form.record_id = bvas_form.record_id
+		LEFT JOIN followup_form ON main_form.record_id = followup_form.record_id
+	""" ];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/patient/{RECORD_ID}" ;
+		rr:class fvc:Patient;
+	] ;
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:patientID ;
+		rr:objectMap [			
+			rr:column "RECORD_ID" ;
+			rr:datatype xsd:string;
+		] ;
+	] ;
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:gender ;
+		rr:objectMap [ rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{GENDER_NCIT}" ];
+	] ;
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:yearOfBirth ;
+		rr:objectMap [			
+			rr:column "YEAR_OF_BIRTH" ;
+			rr:datatype xsd:gYear;
+		] ;
+	] ;
+
+
+    rr:predicateObjectMap [
+        rr:predicate rdf:type;
+        rr:objectMap [ rr:constant dpv:Patient ];
+    ];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasPatientOverview;
+		rr:objectMap [
+		rr:parentTriplesMap <#patient_overview> ;
+		rr:joinCondition [
+			rr:child "RECORD_ID" ;
+			rr:parent "RECORD_ID" ;
+			] ;
+		] ;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasClinicalOutcome;
+		rr:objectMap [
+		rr:parentTriplesMap <#patient_clinical_outcome> ;
+		rr:joinCondition [
+			rr:child "RECORD_ID" ;
+			rr:parent "RECORD_ID" ;
+			] ;
+		] ;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasComplication;
+		rr:objectMap [
+			rr:parentTriplesMap <#complications_malignancy>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "COMPLICATION_DATE";
+				rr:parent "COMPLICATION_DATE";
+			];
+			rr:joinCondition [
+				rr:child "COMPLICATION_TYPE";
+				rr:parent "COMPLICATION_TYPE";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasComplication;
+		rr:objectMap [
+			rr:parentTriplesMap <#complications_cardiovascular>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "COMPLICATION_DATE";
+				rr:parent "COMPLICATION_DATE";
+			];
+			rr:joinCondition [
+				rr:child "COMPLICATION_TYPE";
+				rr:parent "COMPLICATION_TYPE";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasComplication;
+		rr:objectMap [
+			rr:parentTriplesMap <#complications_infection>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "COMPLICATION_DATE";
+				rr:parent "COMPLICATION_DATE";
+			];
+			rr:joinCondition [
+				rr:child "COMPLICATION_TYPE";
+				rr:parent "COMPLICATION_TYPE";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasComplication;
+		rr:objectMap [
+			rr:parentTriplesMap <#complications_thromboembolism>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "COMPLICATION_DATE";
+				rr:parent "COMPLICATION_DATE";
+			];
+			rr:joinCondition [
+				rr:child "COMPLICATION_TYPE";
+				rr:parent "COMPLICATION_TYPE";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasBVAS;
+		rr:objectMap [
+			rr:parentTriplesMap <#bvas>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "BVAS_DATE";
+				rr:parent "BVAS_DATE";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasClinicalTest;
+		rr:objectMap [
+			rr:parentTriplesMap <#clinical_test_mpo_titre>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "DATE_OF_ENCOUNTER";
+				rr:parent "DATE_OF_ENCOUNTER";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasClinicalTest;
+		rr:objectMap [
+			rr:parentTriplesMap <#clinical_test_pr3_titre>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "DATE_OF_ENCOUNTER";
+				rr:parent "DATE_OF_ENCOUNTER";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasClinicalTest;
+		rr:objectMap [
+			rr:parentTriplesMap <#clinical_test_creatinine>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "DATE_OF_ENCOUNTER";
+				rr:parent "DATE_OF_ENCOUNTER";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasClinicalTest;
+		rr:objectMap [
+			rr:parentTriplesMap <#clinical_test_crp>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "DATE_OF_ENCOUNTER";
+				rr:parent "DATE_OF_ENCOUNTER";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasClinicalTest;
+		rr:objectMap [
+			rr:parentTriplesMap <#clinical_test_haemoglobin>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "DATE_OF_ENCOUNTER";
+				rr:parent "DATE_OF_ENCOUNTER";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasClinicalTest;
+		rr:objectMap [
+			rr:parentTriplesMap <#clinical_test_white_cells>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "DATE_OF_ENCOUNTER";
+				rr:parent "DATE_OF_ENCOUNTER";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasClinicalTest;
+		rr:objectMap [
+			rr:parentTriplesMap <#clinical_test_neutrophils>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "DATE_OF_ENCOUNTER";
+				rr:parent "DATE_OF_ENCOUNTER";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasClinicalTest;
+		rr:objectMap [
+			rr:parentTriplesMap <#clinical_test_lymphocytes>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "DATE_OF_ENCOUNTER";
+				rr:parent "DATE_OF_ENCOUNTER";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasClinicalTest;
+		rr:objectMap [
+			rr:parentTriplesMap <#clinical_test_eosinophils>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "DATE_OF_ENCOUNTER";
+				rr:parent "DATE_OF_ENCOUNTER";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasClinicalTest;
+		rr:objectMap [
+			rr:parentTriplesMap <#clinical_test_platelets>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "DATE_OF_ENCOUNTER";
+				rr:parent "DATE_OF_ENCOUNTER";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasClinicalTest;
+		rr:objectMap [
+			rr:parentTriplesMap <#clinical_test_complement_c3>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "DATE_OF_ENCOUNTER";
+				rr:parent "DATE_OF_ENCOUNTER";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasClinicalTest;
+		rr:objectMap [
+			rr:parentTriplesMap <#clinical_test_complement_c4>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "DATE_OF_ENCOUNTER";
+				rr:parent "DATE_OF_ENCOUNTER";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasClinicalTest;
+		rr:objectMap [
+			rr:parentTriplesMap <#clinical_test_urine_acr>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "DATE_OF_ENCOUNTER";
+				rr:parent "DATE_OF_ENCOUNTER";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasClinicalTest;
+		rr:objectMap [
+			rr:parentTriplesMap <#clinical_test_urine_pcr>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "DATE_OF_ENCOUNTER";
+				rr:parent "DATE_OF_ENCOUNTER";
+			];
+		];
+	];
+.
+
+
+<#patient_clinical_outcome>
+
+	rr:logicalTable [ rr:sqlQuery """
+		WITH main_form AS (
+				SELECT
+					record_id,
+					CASE WHEN date_of_death IS NOT NULL OR cause_of_death IS NOT NULL THEN 'true' ELSE 'false' END AS is_dead,
+					FORMATDATETIME(PARSEDATETIME(date_of_death,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS death_date,
+					CASE 
+						WHEN cause_of_death = 'V' THEN 'Vasculitis'
+						WHEN cause_of_death = 'U' THEN 'Unknown'
+						WHEN cause_of_death_known_snome = '355001' THEN 'Other' -- Hemorrhagic Shock
+						WHEN cause_of_death_known_snome = '42343007' THEN 'Cardiovascular' -- Congestive Heart Failure
+						WHEN cause_of_death_known_snome = '409623005' THEN 'Other' -- Respiratory Insufficiency 
+						WHEN cause_of_death_known_snome = '840533007' THEN 'Infection' -- SARS-CoV 2
+					END AS death_cause	
+				FROM FV_PatientData
+				WHERE redcap_repeat_instrument IS NULL
+			),
+			dialysis_form AS (
+				SELECT
+					record_id,
+					CASE WHEN date_dialysis_start IS NOT NULL OR dialysis_type IS NOT NULL OR date_dialysis_stop IS NOT NULL THEN 'true' ELSE 'false' END AS is_dialysed
+				FROM FV_PatientData
+				WHERE redcap_repeat_instrument = 'dialysis_optional' 
+			),
+			eskd_form AS (
+				SELECT
+					record_id,
+					CASE WHEN renal_event IS NOT NULL THEN 'true' ELSE 'false' END AS is_eskd,
+					FORMATDATETIME(PARSEDATETIME(renal_event_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS eskd_date
+				FROM FV_PatientData
+				WHERE redcap_repeat_instrument = 'eskd_outcomes_optional' 
+			),
+			last_followup_form AS (
+				SELECT
+					record_id,
+					FORMATDATETIME(MAX(PARSEDATETIME(followup_date,'yyyy-mm-dd')),'yyyy-mm-dd')||'T00:00:00' AS last_followup_date
+				FROM FV_PatientData
+				WHERE redcap_repeat_instrument = 'annual_or_encounter_followup'
+				GROUP BY record_id
+			)
+		SELECT
+			main_form.record_id,
+			main_form.is_dead,
+			main_form.death_date,
+			main_form.death_cause,
+			dialysis_form.is_dialysed,
+			eskd_form.is_eskd,
+			eskd_form.eskd_date,
+			CASE 
+				WHEN main_form.death_date IS NOT NULL THEN main_form.death_date 
+				ELSE last_followup_form.last_followup_date 
+			END AS last_contact
+		FROM main_form
+		LEFT JOIN dialysis_form ON main_form.record_id = dialysis_form.record_id
+		LEFT JOIN eskd_form ON main_form.record_id = eskd_form.record_id
+		LEFT JOIN last_followup_form ON main_form.record_id = last_followup_form.record_id
+	""" ] ;
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/outcomes/{RECORD_ID}" ;
+		rr:class fvc:ClinicalOutcomes ;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:ESKDStandard;
+		rr:objectMap [
+			rr:column "IS_ESKD";
+			rr:datatype xsd:boolean;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:death;
+		rr:objectMap [
+			rr:column "IS_DEAD";
+			rr:datatype xsd:boolean;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:dateOfDeath;
+		rr:objectMap [
+			rr:column "DEATH_DATE";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:dateOfESKD;
+		rr:objectMap [
+			rr:column "ESKD_DATE";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:lastRecordedContact;
+		rr:objectMap [
+			rr:column "LAST_CONTACT";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:causeOfDeath;
+		rr:objectMap [
+			rr:column "DEATH_CAUSE";
+			rr:datatype xsd:string;
+		];
+	];
+.
+
+
+<#complications_malignancy>
+
+	rr:logicalTable [ rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN complications_type = 'MLG' THEN 'C9305' END AS complication_type, --malignant neoplasm
+			CASE WHEN complications_type = 'MLG' THEN FORMATDATETIME(PARSEDATETIME(date_of_complication, 'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' END AS complication_date,
+			CASE 
+				WHEN malignancy_comp_serv_2 = 1 THEN 'ctcae_mild_selfmanaged'  
+				WHEN malignancy_comp_serv_2 = 2 THEN 'ctcae_moderate_outpatient'
+				WHEN malignancy_comp_serv_2 = 3 THEN 'ctcae_severe_inpatient'
+				WHEN malignancy_comp_serv_2 = 4 THEN 'ctcae_life_threatening'
+				WHEN malignancy_comp_serv_2 = 5 THEN 'ctcae_death'
+			END AS complication_severity,
+			CASE 
+				WHEN malignancy_comp_serv_2 IN (1, 2) THEN 'false'  
+				WHEN malignancy_comp_serv_2 IN (3, 4, 5) THEN 'true'
+			END AS is_severe	
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/complication/malignancy/{RECORD_ID}_{COMPLICATION_TYPE}_{COMPLICATION_DATE}" ;
+		rr:class fvc:ComplicationMalignancy;
+	] ;
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:dateOfComplications;
+		rr:objectMap [
+			rr:column "COMPLICATION_DATE";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:complicationSeverity;
+		rr:objectMap [
+			rr:column "COMPLICATION_SEVERITY";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:severe;
+		rr:objectMap [
+			rr:column "IS_SEVERE";
+			rr:datatype xsd:boolean;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:complicationType;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{COMPLICATION_TYPE}";
+		];
+	];
+.
+
+
+<#complications_cardiovascular>
+
+	rr:logicalTable [ rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN complications_type = 'CVC' THEN 'C115199' END AS complication_type, --cardiovascular complication
+			CASE WHEN complications_type = 'CVC' THEN FORMATDATETIME(PARSEDATETIME(date_of_complication, 'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' END AS complication_date,
+			CASE 
+				WHEN cardiovascular_comp_2 = 1 THEN 'ctcae_mild_selfmanaged'  
+				WHEN cardiovascular_comp_2 = 2 THEN 'ctcae_moderate_outpatient'
+				WHEN cardiovascular_comp_2 = 3 THEN 'ctcae_severe_inpatient'
+				WHEN cardiovascular_comp_2 = 4 THEN 'ctcae_life_threatening'
+				WHEN cardiovascular_comp_2 = 5 THEN 'ctcae_death'
+			END AS complication_severity,
+			CASE 
+				WHEN cardiovascular_comp_2 IN (1, 2) THEN 'false'
+				WHEN cardiovascular_comp_2 IN (3, 4, 5) THEN 'true' 
+			END AS is_severe	
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/complication/cardiovascular/{RECORD_ID}_{COMPLICATION_TYPE}_{COMPLICATION_DATE}" ;
+		rr:class fvc:ComplicationCardiovascular;
+	] ;
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:dateOfComplications;
+		rr:objectMap [
+			rr:column "COMPLICATION_DATE";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:complicationSeverity;
+		rr:objectMap [
+			rr:column "COMPLICATION_SEVERITY";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:severe;
+		rr:objectMap [
+			rr:column "IS_SEVERE";
+			rr:datatype xsd:boolean;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:complicationType;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{COMPLICATION_TYPE}";
+		];
+	];
+.
+
+
+<#complications_infection>
+
+	rr:logicalTable [ rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN complications_type = 'INF' THEN 'C26726' END AS complication_type, --infection
+			CASE WHEN complications_type = 'INF' THEN FORMATDATETIME(PARSEDATETIME(date_of_complication, 'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' END AS complication_date,
+			CASE 
+				WHEN infection_severity = 1 THEN 'ctcae_mild_selfmanaged'  
+				WHEN infection_severity = 2 THEN 'ctcae_moderate_outpatient'
+				WHEN infection_severity = 3 THEN 'ctcae_severe_inpatient'
+				WHEN infection_severity = 4 THEN 'ctcae_life_threatening'
+				WHEN infection_severity = 5 THEN 'ctcae_death'
+			END AS complication_severity,
+			CASE 
+				WHEN infection_severity IN (1, 2) THEN 'false'
+				WHEN infection_severity IN (3, 4, 5) THEN 'true'
+			END AS is_severe	
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/complication/infection/{RECORD_ID}_{COMPLICATION_TYPE}_{COMPLICATION_DATE}" ;
+		rr:class fvc:ComplicationInfection;
+	] ;
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:dateOfComplications;
+		rr:objectMap [
+			rr:column "COMPLICATION_DATE";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:complicationSeverity;
+		rr:objectMap [
+			rr:column "COMPLICATION_SEVERITY";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:severe;
+		rr:objectMap [
+			rr:column "IS_SEVERE";
+			rr:datatype xsd:boolean;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:complicationType;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{COMPLICATION_TYPE}";
+		];
+	];
+.
+
+
+<#complications_thromboembolism>
+
+	rr:logicalTable [ rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN complications_type = 'TBE' 
+				THEN CASE 
+					WHEN thromboembolic_events_dvt IS NOT NULL THEN 'C49343' --Deep Vein Thrombosis
+					WHEN thromboembolic_events_pe IS NOT NULL THEN 'C50713'  --Pulmonary Embolism
+					ELSE 'C143873' --thromboembolic event
+				END	
+			END AS complication_type, 
+			CASE WHEN complications_type = 'TBE' THEN FORMATDATETIME(PARSEDATETIME(date_of_complication, 'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' END AS complication_date	
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/complication/thromboembolism/{RECORD_ID}_{COMPLICATION_TYPE}_{COMPLICATION_DATE}" ;
+		rr:class fvc:ComplicationThromboembolism;
+	] ;
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:dateOfComplications;
+		rr:objectMap [
+			rr:column "COMPLICATION_DATE";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:complicationType;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{COMPLICATION_TYPE}";
+		];
+	];
+.
+
+
+#################  Here follows the Patient Overview section and all related sections: ##########################################à
+
+<#patient_overview>
+
+	rr:logicalTable [ rr:sqlQuery """
+	SELECT 
+		record_id,
+		height_cm
+	FROM FV_PatientData
+	""" ] ;
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/patient/patientoverview/{RECORD_ID}" ;
+		rr:class fvc:PatientOverview ;
+	] ;
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:height ;
+		rr:objectMap [
+			rr:column "HEIGHT_CM" ;
+			rr:datatype xsd:double ;
+		] ;
+	] ;	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasANCA;
+		rr:objectMap [
+		rr:parentTriplesMap <#anca> ;
+		rr:joinCondition [
+			rr:child "RECORD_ID" ;
+			rr:parent "RECORD_ID" ;
+		] ;
+		] ;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasCreatinineAtDiagnosis;
+		rr:objectMap [
+		rr:parentTriplesMap <#creatinine_at_diagnosis> ;
+		rr:joinCondition [
+			rr:child "RECORD_ID" ;
+			rr:parent "RECORD_ID" ;
+		] ;
+		] ;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasOrganPattern;
+		rr:objectMap [
+		rr:parentTriplesMap <#organ_pattern_specific> ;
+		rr:joinCondition [
+			rr:child "RECORD_ID" ;
+			rr:parent "RECORD_ID" ;
+		] ;
+		] ;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasDiagnosis;
+		rr:objectMap [
+			rr:parentTriplesMap <#diagnosis>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasComorbidities;
+		rr:objectMap [
+			rr:parentTriplesMap <#comorbidities>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#induction_azathioprine>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#induction_rituximab>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#induction_cyclophosphamide_oral>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#induction_leflunomide>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#induction_methotrexate>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#induction_mycophenolate_mofetil>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#induction_corticosteroids_oral>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#induction_plasmapheresis>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#induction_tocilizumab>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#induction_corticosteroids_intravenous>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#induction_cyclophosphamide_intravenous>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#induction_other>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#maintenance_azathioprine>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#maintenance_leflunomide>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#maintenance_methotrexate>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#maintenance_mycophenolate_mofetil>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#maintenance_corticosteroids_oral>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#maintenance_rituximab>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:hasTreatment;
+		rr:objectMap [
+			rr:parentTriplesMap <#maintenance_other>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+.
+
+
+<#anca>
+
+
+	rr:logicalTable [ rr:sqlQuery """
+	SELECT 
+		record_id,
+		CASE 
+			WHEN anca_if_en = 'C' THEN 'cANCA positive'
+			WHEN anca_if_en = 'P' THEN 'pANCA positive'
+			WHEN anca_if_en = 'A' THEN 'Atypical'
+			WHEN anca_if_en = 'N' THEN 'Negative'
+			WHEN anca_if_en = 'U' THEN 'Not tested'
+		END AS anca_if,
+		CASE
+			WHEN anca_elisa = 'MP' THEN 'MPO and PR3 positive'
+			WHEN anca_elisa = 'M' THEN 'MPO positive'
+			WHEN anca_elisa = 'EN' THEN 'ELISA negative'
+			WHEN anca_elisa = 'PR' THEN 'PR3 positive'
+			WHEN anca_elisa = 'O' THEN 'Other'
+			WHEN anca_elisa = 'NE' THEN 'No Elisa performed'
+		END AS anca_spec,
+
+	FROM FV_PatientData
+	""" ] ;
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/anca/{RECORD_ID}" ;
+		rr:class fvc:ANCA ;
+	] ;
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:ancaIF ;
+		rr:objectMap [
+			rr:column "ANCA_IF" ;
+			rr:datatype xsd:string ;
+		] ;
+	] ;
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:ancaSpec ;
+		rr:objectMap [
+			rr:column "ANCA_SPEC" ;
+			rr:datatype xsd:string ;
+		] ;
+	] ;
+	
+.
+
+
+<#creatinine_at_diagnosis>
+
+	rr:logicalTable [ rr:sqlQuery """
+	WITH main_form AS (
+		SELECT record_id, date_of_diagnosis
+		FROM FV_PatientData
+		WHERE redcap_repeat_instrument IS NULL
+	),
+	followup_form AS (
+		SELECT record_id, followup_date, creatinine_umol_l
+		FROM FV_PatientData
+		WHERE redcap_repeat_instrument = 'annual_or_encounter_followup'
+	),
+	days_since_diagnosis AS (
+		SELECT 
+			main_form.record_id, 
+			main_form.date_of_diagnosis, 
+			followup_form.followup_date, 
+			followup_form.creatinine_umol_l, 
+			ABS(DATEDIFF(day,
+				PARSEDATETIME(followup_form.followup_date, 'yyyy-mm-dd'), 
+				PARSEDATETIME(main_form.date_of_diagnosis, 'yyyy-mm-dd'))) 
+			AS diff_days
+		FROM main_form JOIN followup_form ON main_form.record_id = followup_form.record_id
+	)
+	SELECT 
+		record_id, 
+		date_of_diagnosis,
+		MIN(CASE WHEN diff_days <= 60 THEN FORMATDATETIME(PARSEDATETIME(followup_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' END) AS followup_date_closest_to_diagnosis,
+		MIN(CASE WHEN diff_days <= 60 THEN creatinine_umol_l END) AS creatinine_at_diagnosis,
+		MIN(CASE WHEN diff_days <= 60 AND creatinine_umol_l IS NOT NULL THEN 'C61023' END) AS test_type, -- Serum Creatinine Measurement 
+        MIN(CASE WHEN diff_days <= 60 AND creatinine_umol_l IS NOT NULL THEN 'C48508' END) AS test_unit -- Micromoles per liter   
+	FROM days_since_diagnosis
+	GROUP BY record_id, date_of_diagnosis
+	""" ] ;
+
+
+	rr:subjectMap[
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/clinical_test/creatinine/{RECORD_ID}_{FOLLOWUP_DATE_CLOSEST_TO_DIAGNOSIS}" ;
+		rr:class fvc:CreatinineTest;
+	] ;
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testDate ;
+		rr:objectMap [			
+			rr:column "FOLLOWUP_DATE_CLOSEST_TO_DIAGNOSIS" ;
+			rr:datatype xsd:dateTime;
+		] ;
+	] ;
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testValue;
+		rr:objectMap [			
+			rr:column "CREATININE_AT_DIAGNOSIS" ;
+			rr:datatype xsd:double;
+		] ;
+	] ;
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testUnit;			
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_UNIT}"];
+    ];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_TYPE}"];
+    ];
+
+
+.
+
+
+<#organ_pattern_specific>
+
+	rr:logicalTable [ rr:sqlQuery """
+	SELECT 
+		record_id,
+		CASE WHEN systems_involved___k = 1 THEN 'Kidney' END AS kidney_involvement,
+		CASE WHEN systems_involved___lg = 1 THEN 'Pulmonary granuloma' END AS pulmonary_granuloma,
+		CASE WHEN systems_involved___lh = 1 THEN 'Pulmonary hemorrhage' END AS pulmonary_hemorrhage,
+		CASE WHEN systems_involved___li = 1 THEN 'Interstitial lung disease' END AS interstitial_lung_disease,
+		CASE WHEN systems_involved___lg = 1 OR systems_involved___lh = 1 OR systems_involved___li = 1   
+			THEN 'Lung' END AS lung_involvement,
+		CASE WHEN systems_involved___ent = 1 THEN 'Ear/Nose/Throat' END AS ent_involvement,
+		CASE WHEN systems_involved___t = 1 THEN 'Tracheal' END AS tracheal_involvement,
+		CASE WHEN systems_involved___mt = 1 THEN 'Mucocutaneous' END AS mucocutaneous_involvement,
+		CASE WHEN systems_involved___ms = 1 THEN 'Musculoskeletal' END AS musculoskeletal_involvement,
+		CASE WHEN systems_involved___cns = 1 THEN 'Central nervous system' END AS cns_involvement,
+		CASE WHEN systems_involved___pns = 1 THEN 'Peripheral nervous system' END AS pns_involvement,
+		CASE WHEN systems_involved___a = 1 THEN 'Abdominal' END AS abdominal_involvement,
+		CASE WHEN systems_involved___e = 1 THEN 'Eye' END AS ocular_involvement,
+		CASE WHEN systems_involved___c = 1 THEN 'Cardiovascular' END AS cardiovascular_involvement
+	FROM FV_PatientData
+	""" ] ;
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/organ_pattern/organ_pattern_specific/{RECORD_ID}" ;
+		rr:class fvc:OrganPattern;
+	] ;
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:genericTerm ;
+		rr:objectMap [
+			rr:template "false";
+			rr:datatype xsd:boolean;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "KIDNEY_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "LUNG_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "ENT_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "TRACHEAL_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "MUCOCUTANEOUS_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "MUSCULOSKELETAL_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "CNS_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "PNS_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "ABDOMINAL_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "OCULAR_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "CARDIOVASCULAR_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:organDiseasePatternLung;
+		rr:objectMap [ 
+			rr:column "PULMONARY_GRANULOMA";
+			rr:datatype xsd:string; 
+		];
+    ];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:organDiseasePatternLung;
+		rr:objectMap [ 
+			rr:column "PULMONARY_HEMORRHAGE";
+			rr:datatype xsd:string; 
+		];
+    ];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:organDiseasePatternLung;
+		rr:objectMap [ 
+			rr:column "INTERSTITIAL_LUNG_DISEASE";
+			rr:datatype xsd:string; 
+		];
+    ];	
+.
+
+
+<#organ_pattern_generic>
+
+	rr:logicalTable [ rr:sqlQuery """
+	SELECT 
+		record_id,
+		CASE WHEN systems_involved___k = 1 THEN 'Kidney' END AS kidney_involvement,
+		CASE WHEN systems_involved___lg = 1 THEN 'Pulmonary granuloma' END AS pulmonary_granuloma,
+		CASE WHEN systems_involved___lh = 1 THEN 'Pulmonary hemorrhage' END AS pulmonary_hemorrhage,
+		CASE WHEN systems_involved___li = 1 THEN 'Interstitial lung disease' END AS interstitial_lung_disease,
+		CASE WHEN systems_involved___lg = 1 OR systems_involved___lh = 1 OR systems_involved___li = 1  
+			THEN 'Lung' END AS lung_involvement,
+		CASE WHEN systems_involved___ent = 1 OR systems_involved___t = 1 THEN 'Ear/Nose/Throat' END AS ent_involvement,
+		-- including tracheal involvement
+		CASE WHEN systems_involved___mt = 1 OR systems_involved___e = 1 
+			THEN 'Mucocutaneous/Eye' END AS mucocut_eye_involvement,
+		CASE WHEN systems_involved___ms = 1 THEN 'Musculoskeletal' END AS musculoskeletal_involvement,
+		CASE WHEN systems_involved___cns = 1 OR systems_involved___pns = 1 
+			THEN 'Nervous system' END AS nervsys_involvement,
+			-- including CNS and PNS
+		CASE WHEN systems_involved___a = 1 THEN 'Abdominal' END AS abdominal_involvement,
+		CASE WHEN systems_involved___c = 1 THEN 'Cardiovascular' END AS cardiovascular_involvement
+	FROM FV_PatientData
+	""" ] ;
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/organ_pattern/organ_pattern_generic/{RECORD_ID}" ;
+		rr:class fvc:OrganPattern;
+	] ;
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:genericTerm ;
+		rr:objectMap [
+			rr:template "true";
+			rr:datatype xsd:boolean;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "KIDNEY_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "LUNG_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "ENT_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "MUCOCUT_EYE_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "MUSCULOSKELETAL_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "NERVSYS_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "ABDOMINAL_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:affectedOrgan ;
+		rr:objectMap [
+			rr:column "CARDIOVASCULAR_INVOLVEMENT";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:organDiseasePatternLung;
+		rr:objectMap [ 
+			rr:column "PULMONARY_GRANULOMA";
+			rr:datatype xsd:string; 
+		];
+    ];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:organDiseasePatternLung;
+		rr:objectMap [ 
+			rr:column "PULMONARY_HEMORRHAGE";
+			rr:datatype xsd:string; 
+		];
+    ];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:organDiseasePatternLung;
+		rr:objectMap [ 
+			rr:column "INTERSTITIAL_LUNG_DISEASE";
+			rr:datatype xsd:string; 
+		];
+    ];	
+
+.
+
+
+<#diagnosis>
+
+	rr:logicalTable [ rr:sqlQuery """
+		SELECT 
+			record_id,
+			small_vessel_vas_anca,
+			age_diagnosis, 
+			age_onset, 
+			FORMATDATETIME(PARSEDATETIME(date_of_diagnosis, 'yyyy-mm-dd'), 'yyyy-MM-dd')||'T00:00:00' AS diagnosis_date,
+			FORMATDATETIME(PARSEDATETIME(date_of_symptoms,'yyyy-mm-dd'), 'yyyy-MM-dd')||'T00:00:00' AS onset_date,
+			CASE
+				WHEN diagnosis_confidence_init = 'DE' THEN 'Definite'
+				WHEN diagnosis_confidence_init = 'PR' THEN 'Probable'
+				WHEN diagnosis_confidence_init = 'PO' THEN 'Possible'
+			END AS diagnosis_confidence,
+			CASE
+				WHEN DATEDIFF(day, PARSEDATETIME(enrolment_date, 'yyyy-mm-dd'), PARSEDATETIME(date_of_diagnosis,'yyyy-mm-dd')) <= 180 THEN 'Prospective'
+				WHEN DATEDIFF(day, PARSEDATETIME(enrolment_date, 'yyyy-mm-dd'), PARSEDATETIME(date_of_diagnosis,'yyyy-mm-dd')) > 180 THEN 'Retrospective'
+			END AS inclusion_type
+		FROM FV_PatientData 	  
+	"""];
+
+
+	rr:subjectMap [
+		rr:template  "http://w3id.org/FAIRVASC/resource/italivas/diagnosis/{RECORD_ID}_{SMALL_VESSEL_VAS_ANCA}";
+		rr:class fvc:Diagnosis;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:mainDiagnosis;
+		rr:objectMap [rr:template "http://www.orpha.net/ORDO/Orphanet_{SMALL_VESSEL_VAS_ANCA}"];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:dateOfDiagnosis;
+		rr:objectMap [
+			rr:column "DIAGNOSIS_DATE";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:dateOfCarePathwayStart;
+		rr:objectMap [
+			rr:column "DIAGNOSIS_DATE";
+			rr:datatype xsd:dateTime;
+		];
+	];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:ageAtDiagnosis;
+		rr:objectMap [
+			rr:column "AGE_DIAGNOSIS";
+			rr:datatype xsd:integer;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:dateOfOnset;
+		rr:objectMap [
+			rr:column "ONSET_DATE";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:ageAtOnset;
+		rr:objectMap [
+			rr:column "AGE_ONSET";
+			rr:datatype xsd:integer;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:diagnosisClassification;
+		rr:objectMap [
+			rr:template "Clinical";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:diagnosisConfidence;
+		rr:objectMap [
+			rr:column "DIAGNOSIS_CONFIDENCE";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:inclusionType;
+		rr:objectMap [
+			rr:column "INCLUSION_TYPE";
+			rr:datatype xsd:string;
+		];
+	];
+.
+
+
+<#comorbidities>
+
+	rr:logicalTable [ rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN comorbid_events___195967001 = 1 THEN 'C28397' END AS asthma,
+			CASE WHEN comorbid_events___49436004 = 1 THEN 'C50466' END AS atrial_fibrillation,
+			CASE WHEN comorbid_events___230690007 = 1 THEN 'C3390' END AS cerebrovascular_accident,
+			CASE WHEN comorbid_events___13645005 = 1 THEN 'C3199' END AS copd,
+			CASE WHEN comorbid_events___414545008 = 1 THEN 'C26732' END AS coronary_artery_disease,
+			CASE WHEN comorbid_events___73211009 = 1 THEN 'C2985' END AS diabetes_mellitus,
+			CASE WHEN comorbid_events___55822004 = 1 THEN 'C80385' END AS dyslipidemia,
+			CASE WHEN comorbid_events___38341003 = 1 THEN 'C3117' END AS hypertension,
+			CASE WHEN comorbid_events___40930008 = 1 THEN 'C26800' END AS hypothyroidism,
+			CASE WHEN comorbid_events___108369006 = 1 THEN 'C9305' END AS malignancy,
+			CASE WHEN comorbid_events___90708001 = 1 THEN 'C3149' END AS kidney_disorder,
+			CASE WHEN comorbid_events___371039008 = 1 THEN 'C28195' END AS thromboembolism
+		FROM FV_PatientData	 
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/comorbidity/{RECORD_ID}";
+		rr:class fvc:comorbidities;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:comorbidity;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ASTHMA}"];
+	];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:comorbidity;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ATRIAL_FIBRILLATION}"];
+	];
+
+
+		rr:predicateObjectMap [
+		rr:predicate fvc:comorbidity;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{CEREBROVASCULAR_ACCIDENT}"];
+	];
+
+
+		rr:predicateObjectMap [
+		rr:predicate fvc:comorbidity;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{COPD}"];
+	];
+
+
+		rr:predicateObjectMap [
+		rr:predicate fvc:comorbidity;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{CORONARY_ARTERY_DISEASE}"];
+	];
+
+
+		rr:predicateObjectMap [
+		rr:predicate fvc:comorbidity;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{DIABETES_MELLITUS}"];
+	];
+
+
+		rr:predicateObjectMap [
+		rr:predicate fvc:comorbidity;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{DYSLIPIDEMIA}"];
+	];
+
+
+		rr:predicateObjectMap [
+		rr:predicate fvc:comorbidity;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{HYPERTENSION}"];
+	];
+
+
+		rr:predicateObjectMap [
+		rr:predicate fvc:comorbidity;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{HYPOTHYROIDISM}"];
+	];
+
+
+		rr:predicateObjectMap [
+		rr:predicate fvc:comorbidity;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{MALIGNANCY}"];
+	];
+
+
+		rr:predicateObjectMap [
+		rr:predicate fvc:comorbidity;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{KIDNEY_DISORDER}"];
+	];
+
+
+		rr:predicateObjectMap [
+		rr:predicate fvc:comorbidity;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{THROMBOEMBOLISM}"];
+	];
+.	
+
+
+<#induction_azathioprine>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN induction_treatment___l04ax01 = 1 THEN 'C290' END AS treatment_encoding, --azathioprine
+			CASE WHEN induction_treatment___l04ax01 = 1 THEN 'C38288' END AS route_of_administration --oral 
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/induction/{RECORD_ID}_{TREATMENT_ENCODING}";
+		rr:class fvc:TreatmentInduction;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:routeToAdministration;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ROUTE_OF_ADMINISTRATION}";
+		];
+	]; 
+.
+
+
+<#induction_rituximab>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN induction_treatment___l01xco2 = 1 THEN 'C1702' END AS treatment_encoding, --rituximab
+			CASE WHEN induction_treatment___l01xco2 = 1 THEN 'C38276' END AS route_of_administration --intravenous 
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/induction/{RECORD_ID}_{TREATMENT_ENCODING}";
+		rr:class fvc:TreatmentInduction;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:routeToAdministration;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ROUTE_OF_ADMINISTRATION}";
+		];
+	]; 
+.
+
+
+<#induction_cyclophosphamide_oral>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN induction_treatment___lc01aa01 = 1 THEN 'C405' END AS treatment_encoding, --cyclophosphamide
+			CASE WHEN induction_treatment___lc01aa01 = 1 THEN 'C38288' END AS route_of_administration --oral
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/induction/{RECORD_ID}_{TREATMENT_ENCODING}_{ROUTE_OF_ADMINISTRATION}";
+		rr:class fvc:TreatmentInduction;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:routeToAdministration;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ROUTE_OF_ADMINISTRATION}";
+		];
+	]; 
+.
+
+
+<#induction_leflunomide>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN induction_treatment___l04aa13 = 1 THEN 'C1128' END AS treatment_encoding, --leflunomide
+			CASE WHEN induction_treatment___l04aa13 = 1 THEN 'C38288' END AS route_of_administration --oral 
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/induction/{RECORD_ID}_{TREATMENT_ENCODING}";
+		rr:class fvc:TreatmentInduction;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:routeToAdministration;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ROUTE_OF_ADMINISTRATION}";
+		];
+	]; 
+.
+
+
+<#induction_methotrexate>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN induction_treatment___l01ba01 = 1 THEN 'C642' END AS treatment_encoding, --methotrexate
+			CASE WHEN induction_treatment___l01ba01 = 1 THEN 'C38288' END AS route_of_administration --oral 
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/induction/{RECORD_ID}_{TREATMENT_ENCODING}";
+		rr:class fvc:TreatmentInduction;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:routeToAdministration;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ROUTE_OF_ADMINISTRATION}";
+		];
+	]; 
+.
+
+
+<#induction_mycophenolate_mofetil>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN induction_treatment___l04aa06 = 1 THEN 'C1468' END AS treatment_encoding, --mycophenolate mofetil
+			CASE WHEN induction_treatment___l04aa06 = 1 THEN 'C38288' END AS route_of_administration --oral 
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/induction/{RECORD_ID}_{TREATMENT_ENCODING}";
+		rr:class fvc:TreatmentInduction;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	]; 
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:routeToAdministration;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ROUTE_OF_ADMINISTRATION}";
+		];
+	]; 
+.
+
+
+<#induction_corticosteroids_oral>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN induction_treatment___oct = 1 THEN 'C521' END AS treatment_encoding, --glucocorticoids
+			CASE WHEN induction_treatment___oct = 1 THEN 'C38288' END AS route_of_administration --oral
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/induction/{RECORD_ID}_{TREATMENT_ENCODING}_{ROUTE_OF_ADMINISTRATION}";
+		rr:class fvc:TreatmentInduction;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:routeToAdministration;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ROUTE_OF_ADMINISTRATION}";
+		];
+	]; 
+.
+
+
+<#induction_plasmapheresis>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN induction_treatment___px = 1 THEN 'C15304' END AS treatment_encoding, --plasmapheresis
+			CASE WHEN induction_treatment___px = 1 THEN 'C38276' END AS route_of_administration --intravenous 
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/induction/{RECORD_ID}_{TREATMENT_ENCODING}";
+		rr:class fvc:TreatmentInduction;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	]; 
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:routeToAdministration;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ROUTE_OF_ADMINISTRATION}";
+		];
+	]; 
+.
+
+
+<#induction_tocilizumab>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN induction_treatment___l04ac07 = 1 THEN 'C84217' END AS treatment_encoding, --tocilizumab
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/induction/{RECORD_ID}_{TREATMENT_ENCODING}";
+		rr:class fvc:TreatmentInduction;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	]; 
+.
+
+
+<#induction_corticosteroids_intravenous>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN induction_treatment___ivc = 1 THEN 'C647' END AS treatment_encoding, --methylprednisolone
+			CASE WHEN induction_treatment___ivc = 1 THEN 'C38276' END AS route_of_administration --intravenous
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/induction/{RECORD_ID}_{TREATMENT_ENCODING}_{ROUTE_OF_ADMINISTRATION}";
+		rr:class fvc:TreatmentInduction;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:routeToAdministration;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ROUTE_OF_ADMINISTRATION}";
+		];
+	]; 
+.
+
+
+<#induction_cyclophosphamide_intravenous>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN induction_treatment___lc01aa01 = 1 THEN 'C405' END AS treatment_encoding, --cyclophosphamide
+			CASE WHEN induction_treatment___lc01aa01 = 1 THEN 'C38276' END AS route_of_administration --intravenous
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/induction/{RECORD_ID}_{TREATMENT_ENCODING}_{ROUTE_OF_ADMINISTRATION}";
+		rr:class fvc:TreatmentInduction;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:routeToAdministration;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ROUTE_OF_ADMINISTRATION}";
+		];
+	]; 
+.
+
+
+<#induction_other>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE 
+				WHEN induction_treatment_atc = 'L04AA06' THEN 'C673' -- mycophenolic acid
+				WHEN induction_treatment_atc = 'S01AD05' THEN 'C20493' -- interferon
+				WHEN induction_treatment_atc IN ('J06BA02','J06BA01','J06BA','J06B') THEN 'C2701' -- therapeutic immunoglobulins
+				WHEN induction_treatment_atc = 'R03DX05' THEN 'C29299' -- omalizumab
+				WHEN induction_treatment_atc = 'R03DC03' THEN 'C66189' -- montelukast
+				WHEN induction_treatment_atc = 'S01XA18' THEN 'C406' -- cyclosporin
+				WHEN induction_treatment_atc = 'R03DX09' THEN 'C157376' -- mepolizumab 
+			END AS treatment_encoding
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/induction/{RECORD_ID}_{TREATMENT_ENCODING}";
+		rr:class fvc:TreatmentInduction;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	]; 
+.
+
+
+<#maintenance_azathioprine>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN maintenance_treatment___l04ax01 = 1 THEN 'C290' END AS treatment_encoding, --azathioprine
+			CASE WHEN maintenance_treatment___l04ax01 = 1 THEN 'C38288' END AS route_of_administration --oral 
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/maintenance/{RECORD_ID}_{TREATMENT_ENCODING}";
+		rr:class fvc:TreatmentMaintenance;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:routeToAdministration;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ROUTE_OF_ADMINISTRATION}";
+		];
+	]; 
+.
+
+
+<#maintenance_leflunomide>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN maintenance_treatment___l04aa13 = 1 THEN 'C1128' END AS treatment_encoding, --leflunomide
+			CASE WHEN maintenance_treatment___l04aa13 = 1 THEN 'C38288' END AS route_of_administration --oral
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/maintenance/{RECORD_ID}_{TREATMENT_ENCODING}";
+		rr:class fvc:TreatmentMaintenance;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:routeToAdministration;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ROUTE_OF_ADMINISTRATION}";
+		];
+	]; 
+.
+
+
+<#maintenance_methotrexate>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN maintenance_treatment___l01ba01 = 1 THEN 'C642' END AS treatment_encoding, --methotrexate
+			CASE WHEN maintenance_treatment___l01ba01 = 1 THEN 'C38288' END AS route_of_administration --oral 
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/maintenance/{RECORD_ID}_{TREATMENT_ENCODING}";
+		rr:class fvc:TreatmentMaintenance;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	]; 
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:routeToAdministration;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ROUTE_OF_ADMINISTRATION}";
+		];
+	]; 
+.
+
+
+<#maintenance_mycophenolate_mofetil>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN maintenance_treatment___l04aa06 = 1 THEN 'C1468' END AS treatment_encoding, --mycophenolate mofetil
+			CASE WHEN maintenance_treatment___l04aa06 = 1 THEN 'C38288' END AS route_of_administration --oral 
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/maintenance/{RECORD_ID}_{TREATMENT_ENCODING}";
+		rr:class fvc:TreatmentMaintenance;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	]; 
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:routeToAdministration;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ROUTE_OF_ADMINISTRATION}";
+		];
+	]; 
+.
+
+
+<#maintenance_corticosteroids_oral>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN maintenance_treatment___oct = 1 THEN 'C521' END AS treatment_encoding, --glucocorticoids
+			CASE WHEN maintenance_treatment___oct = 1 THEN 'C38288' END AS route_of_administration --oral
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/maintenance/{RECORD_ID}_{TREATMENT_ENCODING}_{ROUTE_OF_ADMINISTRATION}";
+		rr:class fvc:TreatmentMaintenance;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:routeToAdministration;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ROUTE_OF_ADMINISTRATION}";
+		];
+	]; 
+.
+
+
+<#maintenance_rituximab>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE WHEN maintenance_treatment___l01xco2 = 1 THEN 'C1702' END AS treatment_encoding, --rituximab
+			CASE WHEN maintenance_treatment___l01xco2 = 1 THEN 'C38276' END AS route_of_administration --intravenous  
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/maintenance/{RECORD_ID}_{TREATMENT_ENCODING}";
+		rr:class fvc:TreatmentMaintenance;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:routeToAdministration;
+		rr:objectMap [
+			rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{ROUTE_OF_ADMINISTRATION}";
+		];
+	]; 
+.
+
+
+<#maintenance_other>
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT
+			record_id,
+			CASE 
+				WHEN maintenance_other_atc = 'R03DX09' THEN 'C157376' -- mepolizumab
+				WHEN maintenance_other_atc IN ('J06BA02','J06BA01','J06BA','J06B') THEN 'C2701' -- therapeutic immunoglobulins
+				WHEN maintenance_other_atc = 'L04AA06' THEN 'C673' -- mycophenolic acid
+				WHEN maintenance_other_atc = 'L01AA01' THEN 'C405' -- cyclophosphamide
+				WHEN maintenance_other_atc = 'S01XA18' THEN 'C406' -- cyclosporin
+			END AS treatment_encoding
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/overview/treatment/maintenance/{RECORD_ID}_{TREATMENT_ENCODING}";
+		rr:class fvc:TreatmentMaintenance;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:treatmentType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TREATMENT_ENCODING}"];
+	]; 
+.
+
+
+###################  Here follow all the sections related to clinical tests:   ############################
+
+
+<#clinical_test_mpo_titre>
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(followup_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS date_of_encounter,
+			CASE 
+				WHEN mpo_anca_level_lab_an = 'P' THEN 'Positive'
+				WHEN mpo_anca_level_lab_an = 'N' THEN 'Negative'
+				WHEN mpo_anca_level_lab_an = 'NP' THEN 'Not available'
+			END AS mpo_anca_titre	 
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/clinical_test/mpo/{RECORD_ID}_{DATE_OF_ENCOUNTER}";
+		rr:class fvc:MpoTest;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:mpoTitreDefault;
+		rr:objectMap [
+			rr:column "MPO_ANCA_TITRE";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testDate;
+		rr:objectMap [
+			rr:column "DATE_OF_ENCOUNTER";
+			rr:datatype xsd:dateTime;
+		];
+	];
+.
+
+
+<#clinical_test_pr3_titre>
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(followup_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS date_of_encounter,
+			CASE 
+				WHEN pr3_anca_level_lab_an = 'P' THEN 'Positive'
+				WHEN pr3_anca_level_lab_an = 'N' THEN 'Negative'
+				WHEN pr3_anca_level_lab_an = 'NP' THEN 'Not available'
+			END AS pr3_anca_titre	 
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/clinical_test/pr3/{RECORD_ID}_{DATE_OF_ENCOUNTER}";
+		rr:class fvc:Pr3Test;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:pr3TitreDefault;
+		rr:objectMap [
+			rr:column "PR3_ANCA_TITRE";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testDate;
+		rr:objectMap [
+			rr:column "DATE_OF_ENCOUNTER";
+			rr:datatype xsd:dateTime;
+		];
+	];
+.
+
+
+<#clinical_test_creatinine>
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(followup_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS date_of_encounter,
+			creatinine_umol_l,
+			CASE WHEN creatinine_umol_l IS NOT NULL THEN 'C61023' END AS test_type, --Serum Creatinine Measurement
+			CASE WHEN creatinine_umol_l IS NOT NULL THEN 'C48508' END AS test_unit --Micromole per Liter
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/clinical_test/creatinine/{RECORD_ID}_{DATE_OF_ENCOUNTER}_{TEST_TYPE}";
+		rr:class fvc:CreatinineTest;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testValue;
+		rr:objectMap [
+			rr:column "CREATININE_UMOL_L";
+			rr:datatype xsd:double;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testDate;
+		rr:objectMap [
+			rr:column "DATE_OF_ENCOUNTER";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_TYPE}"];
+	];
+
+	
+	rr:predicateObjectMap [
+		rr:predicate fvc:testUnit;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_UNIT}"];
+	];
+.
+
+
+<#clinical_test_crp>
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(followup_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS date_of_encounter,
+			crp_mg_l,
+			CASE WHEN crp_mg_l IS NOT NULL THEN 'C64548' END AS test_type, --CRP Measurement
+			CASE WHEN crp_mg_l IS NOT NULL THEN 'C64572' END AS test_unit --Microgram per Milliliter = Milligram per Liter
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/clinical_test/{RECORD_ID}_{DATE_OF_ENCOUNTER}_{TEST_TYPE}";
+		rr:class fvc:CRPTest;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testValue;
+		rr:objectMap [
+			rr:column "CRP_MG_L";
+			rr:datatype xsd:double;
+		];
+	];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testDate;
+		rr:objectMap [
+			rr:column "DATE_OF_ENCOUNTER";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_TYPE}"];
+	];
+
+	
+	rr:predicateObjectMap [
+		rr:predicate fvc:testUnit;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_UNIT}"];
+	];
+.
+
+
+<#clinical_test_haemoglobin>
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(followup_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS date_of_encounter,
+			haemoglobin_g_dl,
+			CASE WHEN haemoglobin_g_dl IS NOT NULL THEN 'C64848' END AS test_type, --Haemoglobin Measurement
+			CASE WHEN haemoglobin_g_dl IS NOT NULL THEN 'C64783' END AS test_unit --Gram per Deciliter
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/clinical_test/{RECORD_ID}_{DATE_OF_ENCOUNTER}_{TEST_TYPE}";
+		rr:class fvc:HaemoglobinTest;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testValue;
+		rr:objectMap [
+			rr:column "HAEMOGLOBIN_G_DL";
+			rr:datatype xsd:double;
+		];
+	];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testDate;
+		rr:objectMap [
+			rr:column "DATE_OF_ENCOUNTER";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_TYPE}"];
+	];
+
+	
+	rr:predicateObjectMap [
+		rr:predicate fvc:testUnit;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_UNIT}"];
+	];
+.
+
+
+<#clinical_test_white_cells>
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(followup_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS date_of_encounter,
+			total_white_cell_count,
+			CASE WHEN total_white_cell_count IS NOT NULL THEN 'C51948' END AS test_type, --Leukocyte Count
+			CASE WHEN total_white_cell_count IS NOT NULL THEN 'C67255' END AS test_unit --Billion per Liter
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/clinical_test/{RECORD_ID}_{DATE_OF_ENCOUNTER}_{TEST_TYPE}";
+		rr:class fvc:WhiteCellTest;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testValue;
+		rr:objectMap [
+			rr:column "TOTAL_WHITE_CELL_COUNT";
+			rr:datatype xsd:double;
+		];
+	];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testDate;
+		rr:objectMap [
+			rr:column "DATE_OF_ENCOUNTER";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_TYPE}"];
+	];
+
+	
+	rr:predicateObjectMap [
+		rr:predicate fvc:testUnit;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_UNIT}"];
+	];
+.
+
+
+<#clinical_test_neutrophils>
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(followup_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS date_of_encounter,
+			neutrophil_count,
+			CASE WHEN neutrophil_count IS NOT NULL THEN 'C51950' END AS test_type, --Neutrophil Count
+			CASE WHEN neutrophil_count IS NOT NULL THEN 'C67255' END AS test_unit --Billion per Liter
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/clinical_test/{RECORD_ID}_{DATE_OF_ENCOUNTER}_{TEST_TYPE}";
+		rr:class fvc:NeutrophilTest;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testValue;
+		rr:objectMap [
+			rr:column "NEUTROPHIL_COUNT";
+			rr:datatype xsd:double;
+		];
+	];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testDate;
+		rr:objectMap [
+			rr:column "DATE_OF_ENCOUNTER";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_TYPE}"];
+	];
+
+	
+	rr:predicateObjectMap [
+		rr:predicate fvc:testUnit;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_UNIT}"];
+	];
+.
+
+
+<#clinical_test_lymphocytes>
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(followup_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS date_of_encounter,
+			lymphocyte_count,
+			CASE WHEN lymphocyte_count IS NOT NULL THEN 'C51949' END AS test_type, --Lymphocyte Count
+			CASE WHEN lymphocyte_count IS NOT NULL THEN 'C67255' END AS test_unit --Billion per Liter
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/clinical_test/{RECORD_ID}_{DATE_OF_ENCOUNTER}_{TEST_TYPE}";
+		rr:class fvc:LymphocyteTest;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testValue;
+		rr:objectMap [
+			rr:column "LYMPHOCYTE_COUNT";
+			rr:datatype xsd:double;
+		];
+	];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testDate;
+		rr:objectMap [
+			rr:column "DATE_OF_ENCOUNTER";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_TYPE}"];
+	];
+
+	
+	rr:predicateObjectMap [
+		rr:predicate fvc:testUnit;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_UNIT}"];
+	];
+.
+
+
+<#clinical_test_eosinophils>
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(followup_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS date_of_encounter,
+			eosinophil_count,
+			CASE WHEN eosinophil_count IS NOT NULL THEN 'C64550' END AS test_type, --Eosinophil Count
+			CASE WHEN eosinophil_count IS NOT NULL THEN 'C67255' END AS test_unit --Billion per Liter
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/clinical_test/{RECORD_ID}_{DATE_OF_ENCOUNTER}_{TEST_TYPE}";
+		rr:class fvc:EosinophilTest;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testValue;
+		rr:objectMap [
+			rr:column "EOSINOPHIL_COUNT";
+			rr:datatype xsd:double;
+		];
+	];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testDate;
+		rr:objectMap [
+			rr:column "DATE_OF_ENCOUNTER";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_TYPE}"];
+	];
+
+	
+	rr:predicateObjectMap [
+		rr:predicate fvc:testUnit;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_UNIT}"];
+	];
+.
+
+
+<#clinical_test_platelets>
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(followup_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS date_of_encounter,
+			platelet_count_x_10_9_l,
+			CASE WHEN platelet_count_x_10_9_l IS NOT NULL THEN 'C51951' END AS test_type, --Platelet Count
+			CASE WHEN platelet_count_x_10_9_l IS NOT NULL THEN 'C67255' END AS test_unit --Billion per Liter
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/clinical_test/{RECORD_ID}_{DATE_OF_ENCOUNTER}_{TEST_TYPE}";
+		rr:class fvc:PlateletTest;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testValue;
+		rr:objectMap [
+			rr:column "PLATELET_COUNT_X_10_9_L";
+			rr:datatype xsd:double;
+		];
+	];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testDate;
+		rr:objectMap [
+			rr:column "DATE_OF_ENCOUNTER";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_TYPE}"];
+	];
+
+	
+	rr:predicateObjectMap [
+		rr:predicate fvc:testUnit;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_UNIT}"];
+	];
+.
+
+
+<#clinical_test_complement_c3>
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(followup_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS date_of_encounter,
+			CASE WHEN complement_c3 >= 15.0 THEN complement_c3 / 100.0 ELSE complement_c3 END AS complement_c3_g_l, --convert mg/dl to g/l
+			CASE WHEN complement_c3 IS NOT NULL THEN 'C80174' END AS test_type, --Complement C3 Measurement
+			CASE WHEN complement_c3 IS NOT NULL THEN 'C42576' END AS test_unit --Kilogram per Cubic Meter = g/L
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/clinical_test/{RECORD_ID}_{DATE_OF_ENCOUNTER}_{TEST_TYPE}";
+		rr:class fvc:ComplementC3Test;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testValue;
+		rr:objectMap [
+			rr:column "COMPLEMENT_C3_G_L";
+			rr:datatype xsd:double;
+		];
+	];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testDate;
+		rr:objectMap [
+			rr:column "DATE_OF_ENCOUNTER";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_TYPE}"];
+	];
+
+	
+	rr:predicateObjectMap [
+		rr:predicate fvc:testUnit;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_UNIT}"];
+	];
+.
+
+
+<#clinical_test_complement_c4>
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(followup_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS date_of_encounter,
+			CASE WHEN complement_c4 >= 10.0 THEN complement_c4 / 100.0 ELSE complement_c4 END AS complement_c4_g_l, --convert mg/dl to g/l
+			CASE WHEN complement_c4 IS NOT NULL THEN 'C80177' END AS test_type, --Complement C4 Measurement
+			CASE WHEN complement_c4 IS NOT NULL THEN 'C42576' END AS test_unit --Kilogram per Cubic Meter = g/L
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/clinical_test/{RECORD_ID}_{DATE_OF_ENCOUNTER}_{TEST_TYPE}";
+		rr:class fvc:ComplementC4Test;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testValue;
+		rr:objectMap [
+			rr:column "COMPLEMENT_C4_G_L";
+			rr:datatype xsd:double;
+		];
+	];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testDate;
+		rr:objectMap [
+			rr:column "DATE_OF_ENCOUNTER";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_TYPE}"];
+	];
+
+	
+	rr:predicateObjectMap [
+		rr:predicate fvc:testUnit;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_UNIT}"];
+	];
+.
+
+
+<#clinical_test_urine_acr>
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(followup_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS date_of_encounter,
+			urine_acr,
+			CASE WHEN urine_acr IS NOT NULL THEN 'C74761' END AS test_type, --Albumin To Creatinine Protein Ratio Measurement
+			CASE WHEN urine_acr IS NOT NULL THEN 'C73721' END AS test_unit --Gram per Mole = milligram per millimole
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/clinical_test/{RECORD_ID}_{DATE_OF_ENCOUNTER}_{TEST_TYPE}";
+		rr:class fvc:UrineAcrTest;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testValue;
+		rr:objectMap [
+			rr:column "URINE_ACR";
+			rr:datatype xsd:double;
+		];
+	];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testDate;
+		rr:objectMap [
+			rr:column "DATE_OF_ENCOUNTER";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_TYPE}"];
+	];
+
+	
+	rr:predicateObjectMap [
+		rr:predicate fvc:testUnit;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_UNIT}"];
+	];
+.
+
+
+<#clinical_test_urine_pcr>
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(followup_date,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS date_of_encounter,
+			urine_pcr,
+			CASE WHEN urine_pcr IS NOT NULL THEN 'C79463' END AS test_type, --Protein To Creatinine Ratio Measurement
+			CASE WHEN urine_pcr IS NOT NULL THEN 'C73721' END AS test_unit --Gram per Mole = milligram per millimole
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/clinical_test/{RECORD_ID}_{DATE_OF_ENCOUNTER}_{TEST_TYPE}";
+		rr:class fvc:UrinePcrTest;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testValue;
+		rr:objectMap [
+			rr:column "URINE_PCR";
+			rr:datatype xsd:double;
+		];
+	];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testDate;
+		rr:objectMap [
+			rr:column "DATE_OF_ENCOUNTER";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate fvc:testType;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_TYPE}"];
+	];
+
+	
+	rr:predicateObjectMap [
+		rr:predicate fvc:testUnit;
+		rr:objectMap [rr:template "http://ncicb.nci.nih.gov/xml/owl/EVS/Thesaurus.owl#{TEST_UNIT}"];
+	];
+.
+
+
+########## Here follows the BVAS section and all related sections:  ############
+
+
+<#bvas>
+
+	rr:logicalTable [ rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(date_bvas,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS bvas_date,
+			total_score,
+			CASE WHEN persistent = 1 THEN 'true' WHEN persistent = 0 THEN 'false' END AS is_persistent,
+			CASE WHEN total_score = 0 THEN 0 ELSE number_of_major_bvas_items END AS major_items_count,
+			CASE WHEN total_score = 0 THEN 0 ELSE number_of_minor_bvas_items END AS minor_items_count
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/BVAS/resource/italivas/BVAS/{RECORD_ID}_{BVAS_DATE}";
+		rr:class bvas:BVAS;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:dateOfEncounter;
+		rr:objectMap [
+			rr:column "BVAS_DATE";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:bvasScore;
+		rr:objectMap [
+			rr:column "TOTAL_SCORE";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:bvasPersistent;
+		rr:objectMap [
+			rr:column "IS_PERSISTENT";
+			rr:datatype xsd:boolean;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:numberOfMajorBVASItems;
+		rr:objectMap [
+			rr:column "MAJOR_ITEMS_COUNT";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:numberOfMinorBVASItems;
+		rr:objectMap [
+			rr:column "MINOR_ITEMS_COUNT";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:hasBVASAbdominal;
+		rr:objectMap [
+			rr:parentTriplesMap <#bvas_abdominal>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "BVAS_DATE";
+				rr:parent "BVAS_DATE";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:hasBVASCardiovascular;
+		rr:objectMap [
+			rr:parentTriplesMap <#bvas_cardiovascular>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "BVAS_DATE";
+				rr:parent "BVAS_DATE";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:hasBVASChest;
+		rr:objectMap [
+			rr:parentTriplesMap <#bvas_chest>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "BVAS_DATE";
+				rr:parent "BVAS_DATE";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:hasBVASCutaneous;
+		rr:objectMap [
+			rr:parentTriplesMap <#bvas_cutaneous>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "BVAS_DATE";
+				rr:parent "BVAS_DATE";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:hasBVASENT;
+		rr:objectMap [
+			rr:parentTriplesMap <#bvas_ent>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "BVAS_DATE";
+				rr:parent "BVAS_DATE";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:hasBVASGeneral;
+		rr:objectMap [
+			rr:parentTriplesMap <#bvas_general>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "BVAS_DATE";
+				rr:parent "BVAS_DATE";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:hasBVASMucousMembraneEyes;
+		rr:objectMap [
+			rr:parentTriplesMap <#bvas_mucous_membranes_eyes>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "BVAS_DATE";
+				rr:parent "BVAS_DATE";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:hasBVASNervousSystem;
+		rr:objectMap [
+			rr:parentTriplesMap <#bvas_nervous_system>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "BVAS_DATE";
+				rr:parent "BVAS_DATE";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:hasBVASRenal;
+		rr:objectMap [
+			rr:parentTriplesMap <#bvas_renal>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+			rr:joinCondition [
+				rr:child "BVAS_DATE";
+				rr:parent "BVAS_DATE";
+			];
+		];
+	];
+.
+
+
+<#bvas_abdominal>
+
+	rr:logicalTable [ rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(date_bvas,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS bvas_date,
+			abdom_score,
+			CASE 
+				WHEN persistent = 0 THEN abdom_perit * 9 
+				WHEN persistent = 1 THEN abdom_perit * 3 
+			END AS peritonitis,
+			CASE
+				WHEN persistent = 0 THEN abdom_bld_dia * 9
+				WHEN persistent = 1 THEN abdom_bld_dia * 3
+			END AS bloody_diarrhoea,
+			CASE
+				WHEN persistent = 0 THEN abdom_isch_abd_p * 6
+				WHEN persistent = 1 THEN abdom_isch_abd_p * 2
+			END AS isch_abd_pain
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/BVAS/resource/italivas/BVAS/abdominal/{RECORD_ID}_{BVAS_DATE}";
+		rr:class bvas:BVASAbdominal;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:abdominalScore;
+		rr:objectMap [
+			rr:column "ABDOM_SCORE";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:peritonitisScore;
+		rr:objectMap [
+			rr:column "PERITONITIS";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:bloodyDiarrhoeaScore;
+		rr:objectMap [
+			rr:column "BLOODY_DIARRHOEA";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:ischaemicAbdominalPainScore;
+		rr:objectMap [
+			rr:column "ISCH_ABD_PAIN";
+			rr:datatype xsd:int;
+		];
+	];	
+.
+
+
+<#bvas_cardiovascular>
+
+	rr:logicalTable [ rr:sqlQuery """
+		SELECT 
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(date_bvas,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS bvas_date,
+			cardio_score,
+			CASE
+				WHEN persistent = 0 THEN cardio_loss_p *4 
+				WHEN persistent = 1	THEN cardio_loss_p 
+			END AS loss_of_pulses,
+			CASE
+				WHEN persistent = 0 THEN cardio_val_hrt_d *4 
+				WHEN persistent = 1	THEN cardio_val_hrt_d *2
+			END AS valv_heart_dis,
+			CASE
+				WHEN persistent = 0 THEN cardio_peric *3
+				WHEN persistent = 1	THEN cardio_peric
+			END AS pericarditis,
+			CASE
+				WHEN persistent = 0 THEN cardio_isch_card_p *4 
+				WHEN persistent = 1	THEN cardio_isch_card_p *2
+			END AS isch_cardiac_pain,
+			CASE
+				WHEN persistent = 0 THEN cardio_cardmyp *6 
+				WHEN persistent = 1	THEN cardio_cardmyp *3
+			END AS cardiomyopathy, 
+			CASE
+				WHEN persistent = 0 THEN cardio_cong_card_f *6 
+				WHEN persistent = 1	THEN cardio_cong_card_f *3
+			END AS cong_cardiac_fail															 
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/BVAS/resource/italivas/BVAS/cardiovascular/{RECORD_ID}_{BVAS_DATE}";
+		rr:class bvas:BVASCardiovascular;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:cardiovascularScore;
+		rr:objectMap [
+			rr:column "CARDIO_SCORE";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:lossOfPulseScore;
+		rr:objectMap [
+			rr:column "LOSS_OF_PULSES";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:valvulvarHeartDiseaseScore;
+		rr:objectMap [
+			rr:column "VALV_HEART_DIS";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:pericarditisScore;
+		rr:objectMap [
+			rr:column "PERICARDITIS";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:ischaemicCardiacPainScore;
+		rr:objectMap [
+			rr:column "ISCH_CARDIAC_PAIN";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:cardiomyopathyScore;
+		rr:objectMap [
+			rr:column "CARDIOMYOPATHY";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:congestiveCardiacFailureScore;
+		rr:objectMap [
+			rr:column "CONG_CARDIAC_FAIL";
+			rr:datatype xsd:int;
+		];
+	];
+.
+
+
+<#bvas_chest>
+
+	rr:logicalTable [ rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(date_bvas,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS bvas_date,
+			chest_score,
+			CASE
+				WHEN persistent = 0 THEN chest_wheeze *2
+				WHEN persistent = 1 THEN chest_wheeze *1
+			END AS wheeze,	
+			CASE
+				WHEN persistent = 0 THEN chest_nod_o_cav *3
+			END AS nod_or_cav, --whereas this is not applicable in case of persistent BVAS
+			CASE
+				WHEN persistent = 0 THEN chest_pleu_eff *4 
+				WHEN persistent = 1	THEN chest_pleu_eff *2
+			END AS pleu_effusion,				
+			CASE
+				WHEN persistent = 0 THEN chest_infilt *4
+				WHEN persistent = 1	THEN chest_infilt *2
+			END AS infiltrate,
+			CASE
+				WHEN persistent = 0 THEN chest_endbrn_i *4
+				WHEN persistent = 1	THEN chest_endbrn_i *2
+			END AS endobro_inv,
+			CASE
+				WHEN persistent = 0 THEN chest_msv_haem *6
+				WHEN persistent = 1	THEN chest_msv_haem *4 
+			END AS mass_haemopt,
+			CASE
+				WHEN persistent = 0 THEN chest_resp_fail *6 
+				WHEN persistent = 1	THEN chest_resp_fail *4
+			END AS resp_fail																			
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/BVAS/resource/italivas/BVAS/chest/{RECORD_ID}_{BVAS_DATE}";
+		rr:class bvas:BVASChest;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:chestScore;
+		rr:objectMap [
+			rr:column "CHEST_SCORE";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:wheezeScore;
+		rr:objectMap [
+			rr:column "WHEEZE";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:nodulesScore;
+		rr:objectMap [
+			rr:column "NOD_OR_CAV";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:pleurisyScore;
+		rr:objectMap [
+			rr:column "PLEU_EFFUSION";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:infiltrateScore;
+		rr:objectMap [
+			rr:column "INFILTRATE";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:endobronchialScore;
+		rr:objectMap [
+			rr:column "ENDOBRO_INV";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:haemoptysisScore;
+		rr:objectMap [
+			rr:column "MASS_HAEMOPT";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:respiratoryFailureScore;
+		rr:objectMap [
+			rr:column "RESP_FAIL";
+			rr:datatype xsd:int;
+		];
+	];
+.
+
+
+<#bvas_cutaneous>
+
+	rr:logicalTable [ rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(date_bvas,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS bvas_date,
+			cutaneous_score,
+			CASE
+				WHEN persistent = 0 THEN cutaneous_infarct *2
+				WHEN persistent = 1 THEN cutaneous_infarct
+			END AS infarct,
+			CASE
+				WHEN persistent = 0 THEN cutaneous_purp *2
+				WHEN persistent = 1 THEN cutaneous_purp
+			END AS purpura,
+			CASE
+				WHEN persistent = 0 THEN cutaneous_ulcer *4
+				WHEN persistent = 1 THEN cutaneous_ulcer
+			END AS ulcer,
+			CASE
+				WHEN persistent = 0 THEN cutaneous_gangre *6 
+				WHEN persistent = 1 THEN cutaneous_gangre *2
+			END AS gangrene,
+			CASE
+				WHEN persistent = 0 THEN cutaneous_o_sk_vas *2
+				WHEN persistent = 1 THEN cutaneous_o_sk_vas 
+			END AS	skin_vasculitis											
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/BVAS/resource/italivas/BVAS/cutaneous/{RECORD_ID}_{BVAS_DATE}";
+		rr:class bvas:BVASCutaneous;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:cutaneousScore;
+		rr:objectMap [
+			rr:column "CUTANEOUS_SCORE";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:infarctScore;
+		rr:objectMap [
+			rr:column "INFARCT";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:purpuraScore;
+		rr:objectMap [
+			rr:column "PURPURA";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:ulcerScore;
+		rr:objectMap [
+			rr:column "ULCER";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:gangreneScore;
+		rr:objectMap [
+			rr:column "GANGRENE";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:hasOtherSkinVasculitus;
+		rr:objectMap [
+			rr:column "SKIN_VASCULITIS";
+			rr:datatype xsd:int;
+		];
+	];
+.
+
+
+<#bvas_ent>
+
+	rr:logicalTable [ rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(date_bvas,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS bvas_date,
+			ent_score,
+			CASE 
+				WHEN persistent = 0 THEN ent_bnd_c_u_g *4
+				WHEN persistent = 1 THEN ent_bnd_c_u_g *2
+			END AS bloody_nasal,
+			CASE 
+				WHEN persistent = 0 THEN ent_parn_sin_i *2
+				WHEN persistent = 1 THEN ent_parn_sin_i
+			END AS paran_sin_inv,
+			CASE 
+				WHEN persistent = 0 THEN ent_subg_sten *6
+				WHEN persistent = 1 THEN ent_subg_sten *3
+			END AS subgl_sten,
+			CASE 
+				WHEN persistent = 0 THEN ent_cnd_hear_l *3
+				WHEN persistent = 1 THEN ent_cnd_hear_l
+			END AS cond_hear_loss,
+			CASE 
+				WHEN persistent = 0 THEN ent_sns_hear_l *6
+				WHEN persistent = 1 THEN ent_sns_hear_l *2
+			END AS sens_hear_loss												
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/BVAS/resource/italivas/BVAS/ent/{RECORD_ID}_{BVAS_DATE}";
+		rr:class bvas:BVASEnt;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:ENTScore;
+		rr:objectMap [
+			rr:column "ENT_SCORE";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:bloodyNasalScore;
+		rr:objectMap [
+			rr:column "BLOODY_NASAL";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:paranasalScore;
+		rr:objectMap [
+			rr:column "PARAN_SIN_INV";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:subglotticScore;
+		rr:objectMap [
+			rr:column "SUBGL_STEN";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:conductiveScore;
+		rr:objectMap [
+			rr:column "COND_HEAR_LOSS";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:sensorineuralScore;
+		rr:objectMap [
+			rr:column "SENS_HEAR_LOSS";
+			rr:datatype xsd:int;
+		];
+	];
+.
+
+
+<#bvas_general>
+
+	rr:logicalTable [ rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(date_bvas,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS bvas_date,
+			general_score,
+			CASE
+				WHEN persistent = 0 THEN genf_myalgia 
+				WHEN persistent = 1 THEN genf_myalgia 
+			END AS myalgia,
+			CASE
+				WHEN persistent = 0 THEN genf_arthralgia
+				WHEN persistent = 1 THEN genf_arthralgia 
+			END AS arthralgia,
+			CASE
+				WHEN persistent = 0 THEN genf_fever *2
+				WHEN persistent = 1 THEN genf_fever *2
+			END AS fever, 
+			CASE
+				WHEN persistent = 0 THEN genf_weight_loss *2
+				WHEN persistent = 1 THEN genf_weight_loss *2
+			END AS weight_loss									
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/BVAS/resource/italivas/BVAS/general/{RECORD_ID}_{BVAS_DATE}";
+		rr:class bvas:BVASGeneral;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:generalScore;
+		rr:objectMap [
+			rr:column "GENERAL_SCORE";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:myalgiaScore;
+		rr:objectMap [
+			rr:column "MYALGIA";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:artScore;
+		rr:objectMap [
+			rr:column "ARTHRALGIA";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:feverScore;
+		rr:objectMap [
+			rr:column "FEVER";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:weightLossScore;
+		rr:objectMap [
+			rr:column "WEIGHT_LOSS";
+			rr:datatype xsd:int;
+		];
+	];
+.
+
+
+<#bvas_mucous_membranes_eyes>
+
+	rr:logicalTable [ rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(date_bvas,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS bvas_date,
+			muc_mb_e_score,
+			CASE 
+				WHEN persistent = 0 THEN muc_mb_e_m_ulc_gra *2
+				WHEN persistent = 1 THEN muc_mb_e_m_ulc_gra
+			END AS mouth_ulcers,
+			CASE 
+				WHEN persistent = 0 THEN muc_mb_e_gen_ulc 
+				WHEN persistent = 1 THEN muc_mb_e_gen_ulc
+			END AS genital_ulcers,
+			CASE 
+				WHEN persistent = 0 THEN muc_mb_e_ad_inf *4
+				WHEN persistent = 1 THEN muc_mb_e_ad_inf *2
+			END AS adnexal_infl,
+			CASE 
+				WHEN persistent = 0 THEN muc_mb_e_sig_prop *4
+				WHEN persistent = 1 THEN muc_mb_e_sig_prop *2
+			END AS sign_proptosis,
+			CASE 
+				WHEN persistent = 0 THEN muc_mb_e_scle_epis *2
+				WHEN persistent = 1 THEN muc_mb_e_scle_epis 
+			END AS scler_or_episcler,
+			CASE 
+				WHEN persistent = 0 THEN muc_mb_e_con_ble_ker
+				WHEN persistent = 1 THEN muc_mb_e_con_ble_ker
+			END AS conj_ble_ker,
+			CASE 
+				WHEN persistent = 0 THEN muc_mb_e_blur_v *3
+				WHEN persistent = 1 THEN muc_mb_e_blur_v *2
+			END AS blurred_vision,
+			CASE 
+				WHEN persistent = 0 THEN muc_mb_e_sud_v_loss *6
+			END AS sudden_v_loss, --whereas this is not applicable in case of persistent BVAS
+			CASE 
+				WHEN persistent = 0 THEN muc_mb_e_uveitis *6
+				WHEN persistent = 1 THEN muc_mb_e_uveitis *2
+			END AS uveitis,
+			CASE 
+				WHEN persistent = 0 THEN muc_mb_e_ret_chng *6
+				WHEN persistent = 1 THEN muc_mb_e_ret_chng *2
+			END AS retinal_changes																											
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/BVAS/resource/italivas/BVAS/mucousmembraneseyes/{RECORD_ID}_{BVAS_DATE}";
+		rr:class bvas:BVASMucousMembraneEyes;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:mucousScore;
+		rr:objectMap [
+			rr:column "MUC_MB_E_SCORE";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:mouthUlcersScore;
+		rr:objectMap [
+			rr:column "MOUTH_ULCERS";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:genitalUlcersScore;
+		rr:objectMap [
+			rr:column "GENITAL_ULCERS";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:adnexalScore;
+		rr:objectMap [
+			rr:column "ADNEXAL_INFL";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:proptosisScore;
+		rr:objectMap [
+			rr:column "SIGN_PROPTOSIS";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:scleritisScore;
+		rr:objectMap [
+			rr:column "SCLER_OR_EPISCLER";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:conjunctivitisScore;
+		rr:objectMap [
+			rr:column "CONJ_BLE_KER";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:blurredVisionScore;
+		rr:objectMap [
+			rr:column "BLURRED_VISION";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:suddenVisualLossScore;
+		rr:objectMap [
+			rr:column "SUDDEN_V_LOSS";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:uveitisScore;
+		rr:objectMap [
+			rr:column "UVEITIS";
+			rr:datatype xsd:int;
+		];
+	];
+
+	rr:predicateObjectMap [
+			rr:predicate bvas:retinalChangesScore;
+			rr:objectMap [
+				rr:column "RETINAL_CHANGES";
+				rr:datatype xsd:int;
+			];
+		];
+.
+
+
+<#bvas_nervous_system>
+
+	rr:logicalTable [ rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(date_bvas,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS bvas_date,
+			nerv_sys_score,
+			CASE 
+				WHEN persistent = 0 THEN nerv_sys_hdache 
+				WHEN persistent = 1 THEN nerv_sys_hdache
+			END AS headache,
+			CASE 
+				WHEN persistent = 0 THEN nerv_sys_mengts *3 
+				WHEN persistent = 1 THEN nerv_sys_mengts
+			END AS meningitis,
+			CASE 
+				WHEN persistent = 0 THEN nerv_sys_org_conf *3  
+				WHEN persistent = 1 THEN nerv_sys_org_conf
+			END AS organic_confusion, 
+			CASE 
+				WHEN persistent = 0 THEN nerv_sys_szr *9 
+				WHEN persistent = 1 THEN nerv_sys_szr *3
+			END AS seizures,
+			CASE 
+				WHEN persistent = 0 THEN nerv_sys_stroke *9
+				WHEN persistent = 1 THEN nerv_sys_stroke *3
+			END AS stroke, 
+			CASE 
+				WHEN persistent = 0 THEN nerv_sys_spn_cor_ls *9
+				WHEN persistent = 1 THEN nerv_sys_spn_cor_ls *3
+			END AS spin_cord_les,
+			CASE 
+				WHEN persistent = 0 THEN nerv_sys_crn_nrv_p *6
+				WHEN persistent = 1 THEN nerv_sys_crn_nrv_p *3
+			END AS cran_nerve_palsy,
+			CASE 
+				WHEN persistent = 0 THEN nerv_sys_sn_prph_n *6
+				WHEN persistent = 1 THEN nerv_sys_sn_prph_n *3
+			END AS sens_peri_neurop,
+			CASE 
+				WHEN persistent = 0 THEN nerv_sys_mon_mult *9
+				WHEN persistent = 1 THEN nerv_sys_mon_mult *3
+			END AS monon_multiplex																							
+		FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/BVAS/resource/italivas/BVAS/nervoussystem/{RECORD_ID}_{BVAS_DATE}";
+		rr:class bvas:BVASNervousSystem;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:nervousSystemScore;
+		rr:objectMap [
+			rr:column "NERV_SYS_SCORE";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:headacheScore;
+		rr:objectMap [
+			rr:column "HEADACHE";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:meningitisScore;
+		rr:objectMap [
+			rr:column "MENINGITIS";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:organicConfusionScore;
+		rr:objectMap [
+			rr:column "ORGANIC_CONFUSION";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:seizuresScore;
+		rr:objectMap [
+			rr:column "SEIZURES";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:spinalCordLesionScore;
+		rr:objectMap [
+			rr:column "SPIN_CORD_LES";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:cranialNervePalsyScore;
+		rr:objectMap [
+			rr:column "CRAN_NERVE_PALSY";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:sensoryPeripheralNeuropathyScore;
+		rr:objectMap [
+			rr:column "SENS_PERI_NEUROP";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:mononeuritisMultiplexScore;
+		rr:objectMap [
+			rr:column "MONON_MULTIPLEX";
+			rr:datatype xsd:int;
+		];
+	];
+.
+
+
+<#bvas_renal>
+
+	rr:logicalTable [ rr:sqlQuery """
+		SELECT
+			record_id,
+			FORMATDATETIME(PARSEDATETIME(date_bvas,'yyyy-mm-dd'),'yyyy-mm-dd')||'T00:00:00' AS bvas_date,
+			renal_score,
+			CASE
+				WHEN persistent = 0 THEN renal_hypert *4
+				WHEN persistent = 1 THEN renal_hypert
+			END AS hypertension, 
+			CASE
+				WHEN persistent = 0 THEN renal_protur *4
+				WHEN persistent = 1 THEN renal_protur *2
+			END AS proteinuria,
+			CASE
+				WHEN persistent = 0 THEN renal_hmur *6
+				WHEN persistent = 1 THEN renal_hmur *3
+			END AS haematuria,
+			CASE
+				WHEN persistent = 0 THEN renal_s_crt_125 *4
+				WHEN persistent = 1 THEN renal_s_crt_125 *2
+			END AS s_creat_125,
+			CASE
+				WHEN persistent = 0 THEN renal_s_crt_250 *6
+				WHEN persistent = 1 THEN renal_s_crt_250 *3
+			END AS s_creat_250,
+			CASE
+				WHEN persistent = 0 THEN renal_s_crt_500 *8
+				WHEN persistent = 1 THEN renal_s_crt_500 *4
+			END AS s_creat_500,
+			CASE
+				WHEN persistent = 0 THEN renal_rof_crt *6
+			END AS rise_in_creatinine --whereas this is not applicable in case of persistent BVAS																		
+		FROM FV_PatientData	
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/BVAS/resource/italivas/BVAS/renal/{RECORD_ID}_{BVAS_DATE}";
+		rr:class bvas:BVASRenal;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:renalScore;
+		rr:objectMap [
+			rr:column "RENAL_SCORE";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:hypertensionScore;
+		rr:objectMap [
+			rr:column "HYPERTENSION";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:proteinuriaScore;
+		rr:objectMap [
+			rr:column "PROTEINURIA";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:haematuriaScore;
+		rr:objectMap [
+			rr:column "HAEMATURIA";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:serumCreatine1Score;
+		rr:objectMap [
+			rr:column "S_CREAT_125";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:serumCreatine2Score;
+		rr:objectMap [
+			rr:column "S_CREAT_250";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:serumCreatine3Score;
+		rr:objectMap [
+			rr:column "S_CREAT_500";
+			rr:datatype xsd:int;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate bvas:creatineChangeScore;
+		rr:objectMap [
+			rr:column "RISE_IN_CREATININE";
+			rr:datatype xsd:int;
+		];
+	];
+.
+
+########## Here follows the registry_consent section: ############
+
+<#registry_consent>
+
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT record_id FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/registry_consent/{RECORD_ID}" ;
+		rr:class dpv:ConsentRecord;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate rdf:type;
+		rr:objectMap [rr:constant fvc:RegistryConsent];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate rdf:type;
+		rr:objectMap [rr:constant fvc:BiobankConsent];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate dpv:hasConsentStatus;
+		rr:objectMap [rr:constant dpv:ConsentGiven];	
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate dpv:isIndicatedBy;
+		rr:objectMap [
+			rr:parentTriplesMap <#patient>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate dpv:hasDataSubject;
+		rr:objectMap [
+			rr:parentTriplesMap <#patient>;
+			rr:joinCondition [
+				rr:child "RECORD_ID";
+				rr:parent "RECORD_ID";
+			];
+		];
+	];	
+.
+
+
+########## Here follows the provenance_acitivty_uplift section and all related sections: #########
+
+<#provenance_activity_uplift>
+
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT SUBSTRING(CURRENT_TIMESTAMP, 1, 10)||'T00:00:00' as date FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/provenance/uplift/{DATE}";
+		rr:class fvc:ProvenanceActivityUplift;
+	];		
+
+
+	rr:predicateObjectMap [
+		rr:predicate prov:startedAtTime;
+		rr:objectMap [
+			rr:column "DATE";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate prov:endedAtTime;
+		rr:objectMap [
+			rr:column "DATE";
+			rr:datatype xsd:dateTime;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate prov:used;
+		rr:objectMap [
+			rr:parentTriplesMap <#csv_file>;
+			rr:joinCondition [
+				rr:child "DATE";
+				rr:parent "DATE";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate prov:wasAssociatedWith;
+		rr:objectMap [
+			rr:parentTriplesMap <#italivas_person_michelangelo>;
+			rr:joinCondition [
+				rr:child "DATE";
+				rr:parent "DATE";
+			];
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate prov:used;
+		rr:objectMap [
+		rr:parentTriplesMap <#r2rml_file> ;
+		rr:joinCondition [
+			rr:child "DATE" ;
+			rr:parent "DATE" ;
+		] ;
+		] ;
+	];	
+
+
+	rr:predicateObjectMap [
+		rr:predicate prov:generated;
+		rr:objectMap [
+			rr:parentTriplesMap <#italivas_graph> ;
+			rr:joinCondition [
+				rr:child "DATE" ;
+				rr:parent "DATE" ;
+			] ;
+		] ;
+	];
+.
+
+
+<#csv_file>
+
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT SUBSTRING(CURRENT_TIMESTAMP, 1, 10)||'T00:00:00' as date FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/provenance/uplift/csv_file/{DATE}";
+		rr:class prov:Entity;	
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate dcterms:title;
+		rr:objectMap [
+			rr:template "italivas CSV file";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate prov:generatedAtTime ;
+		rr:objectMap [ rr:template "2023-07-04T00:00:00"; rr:datatype xsd:dateTime];	
+	] ;
+
+
+	rr:predicateObjectMap [
+		rr:predicate prov:wasAttributedTo;
+		rr:objectMap [
+			rr:parentTriplesMap <#italivas_person_michelangelo>;
+			rr:joinCondition [
+				rr:child "DATE";
+				rr:parent "DATE";
+			];
+		];
+	];
+.
+
+
+<#italivas_person_michelangelo>
+
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT SUBSTRING(CURRENT_TIMESTAMP, 1, 10)||'T00:00:00' as date FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/person/michelangelo.tesi";
+		rr:class prov:Agent;
+		rr:class prov:Person;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate foaf:name;
+		rr:objectMap [
+			rr:template "Michelangelo Tesi";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate foaf:mbox;
+		rr:objectMap [rr:template "mailto:michelangelo.tesi@meyer.it"];
+	];
+.
+
+
+<#r2rml_file>
+
+
+	rr:logicalTable[rr:sqlQuery """
+		SELECT SUBSTRING(CURRENT_TIMESTAMP, 1, 10)||'T00:00:00' as date FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/provenance/uplift/r2rml_file/{DATE}";
+		rr:class prov:Entity;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate dcterms:title;
+		rr:objectMap [
+			rr:template "italivas R2RML file";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate prov:wasAttributedTo;
+		rr:objectMap [
+			rr:parentTriplesMap <#italivas_person_michelangelo> ;
+			rr:joinCondition [
+				rr:child "DATE" ;
+				rr:parent "DATE" ;
+			] ;
+		] ;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate schema:version;
+		rr:objectMap [
+			rr:template "This uplift used ontology version V3.0";
+			rr:datatype xsd:string;
+		];
+	];
+.
+
+
+<#italivas_graph>
+
+
+	rr:logicalTable [rr:sqlQuery """
+		SELECT SUBSTRING(CURRENT_TIMESTAMP, 1, 10)||'T00:00:00' as date FROM FV_PatientData
+	"""];
+
+
+	rr:subjectMap [
+		rr:template "http://w3id.org/FAIRVASC/resource/italivas/provenance/uplift/italivas_graph/{DATE}";
+		rr:class prov:Entity;
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate dcterms:title;
+		rr:objectMap [
+			rr:template "italivas graph";
+			rr:datatype xsd:string;
+		];
+	];
+
+
+	rr:predicateObjectMap [
+		rr:predicate prov:wasGeneratedBy;
+		rr:objectMap [
+			rr:parentTriplesMap <#provenance_activity_uplift> ;
+			rr:joinCondition [
+				rr:child "DATE" ;
+				rr:parent "DATE" ;
+			] ;
+		] ;
+	];
+.
